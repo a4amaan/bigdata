@@ -1,0 +1,29 @@
+FROM ubuntu:18.04
+
+RUN apt-get update && apt-get install curl openssh-server wget openjdk-8-jdk -y
+
+
+RUN wget https://archive.apache.org/dist/hadoop/core/hadoop-2.10.0/hadoop-2.10.0.tar.gz
+RUN tar -xvf hadoop-2.10.0.tar.gz  --one-top-level=hadoop --strip-components 1 -C /opt/
+
+RUN wget http://archive.apache.org/dist/hive/hive-2.3.6/apache-hive-2.3.6-bin.tar.gz
+RUN tar -xvf apache-hive-2.3.6-bin.tar.gz  --one-top-level=hive --strip-components 1 -C /opt/
+
+WORKDIR /opt/hadoop/
+
+RUN apt-get install libpostgresql-jdbc-java nano -y
+RUN ln -s /usr/share/java/postgresql-jdbc4.jar /opt/hive/lib/postgresql-jdbc4.jar
+
+COPY ./etc/hadoop/core-site.xml /opt/hadoop/etc/hadoop/core-site.xml
+COPY ./etc/hadoop/hdfs-site.xml /opt/hadoop/etc/hadoop/hdfs-site.xml
+COPY ./etc/hadoop/hadoop-env.sh /opt/hadoop/etc/hadoop/hadoop-env.sh
+COPY ./conf/hive-env.sh /opt/hadoop/etc/hadoop/hive-env.sh
+
+COPY ./conf/hive-env.sh /opt/hive/conf/hive-env.sh
+COPY ./conf/hive-site.xml /opt/hive/conf/hive-site.xml
+COPY ./lib/alluxio-2.4.0-client.jar /opt/hive/lib/alluxio-2.4.0-client.jar
+
+COPY ./entrypoint.sh /root/entrypoint.sh
+RUN chmod 700 /root/entrypoint.sh
+
+ENTRYPOINT ["/root/entrypoint.sh"]

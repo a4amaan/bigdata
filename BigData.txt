@@ -1,0 +1,110 @@
+
+=============================== Setup alluxio With Proxy ===============================
+Get IP Address by ifconfig and replace below ip address:
+
+
+docker volume create ufs
+docker network create alluxio_network
+docker run -d  --rm     -p 19999:19999     -p 19998:19998     -p 39999:39999     --net=alluxio_network     --name=alluxio-master     -v /data/master:/opt/alluxio/logs     -v ufs:/opt/alluxio/underFSStorage     -e ALLUXIO_JAVA_OPTS="-Dalluxio.master.hostname=alluxio-master -Dalluxio.master.mount.table.root.ufs=/opt/alluxio/underFSStorage -Dalluxio.user.file.delete.unchecked=true -Dalluxio.user.file.writetype.default=CACHE_THROUGH -Dalluxio.user.file.ufs.tier.enabled=true -Dalluxio.security.authorization.permission.umask=000"      alluxio/alluxio master
+docker run -d --rm     -p 29999:29999     -p 29998:29998     -p 30000:30000     --net=alluxio_network     --name=alluxio-worker-1     -v /data/worker:/opt/alluxio/logs     -v ufs:/opt/alluxio/underFSStorage     --shm-size=16G     -e ALLUXIO_JAVA_OPTS="-Dalluxio.worker.memory.size=16G  -Dalluxio.master.hostname=alluxio-master  -Dalluxio.worker.hostname=192.168.23.210 -Dalluxio.user.file.delete.unchecked=true -Dalluxio.user.file.writetype.default=CACHE_THROUGH -Dalluxio.user.file.ufs.tier.enabled=true -Dalluxio.security.authorization.permission.umask=000"      alluxio/alluxio worker
+
+Login As Root to Start Proxy:
+docker exec -it --user root alluxio-master /bin/bash
+cd bin
+./alluxio-start.sh proxy
+
+=============================== Setup Hive Metastore ===============================
+Get release the port if being used
+sudo fuser -k 3306/tcp
+
+
+docker build -t hive-image -f hive/Dockerfile .
+docker run -d --shm-size 1G --net=alluxio_network -p 9083:9083  -p 3306:3306 --name=hive-00 hive-image
+docker logs hive-00
+docker exec -it hive-00 mysql -uroot -p'ygEK[AH3g4tsub0v0vyNLoqytApk'
+OcAc$icz3shuSCos9AsygPUN73B
+5. docker logs hive-00 2>&1 | grep GENERATED      //this gets random password set for root, which is used in below step 6.
+6. docker exec -it mysql1 mysql -uroot -p'{password_obtained_from_above_command_4.}'
+   6.1. ALTER USER 'root'@'localhost' IDENTIFIED BY 'password';
+   6.2. CREATE database metastore;
+   6.3. CREATE USER 'hiveuser'@'%' IDENTIFIED BY 'hivepassword';
+   6.4. GRANT ALL PRIVILEGES ON metastore . * TO 'hiveuser'@'%'; 
+	USE metastore;
+   6.5. SOURCE /opt/apache-hive-2.1.0-bin/scripts/metastore/upgrade/mysql/hive-schema-0.14.0.mysql.sql;
+
+SET Directory Permissions By Using Bash Terminal inside Docker:
+chmod -R 777 /user/hive/warehouse
+
+SART HIVE SHELL:
+docker exec -u datamaster -it hive-00 hive
+
+
+=============================== Setup Presto ===============================
+docker build -t presto-coordinator-image -f presto-coordinator/Dockerfile .
+docker run -d --shm-size 3G -u datamaster -p 8080:8080 --net=alluxio_network --name=presto-coordinator presto-coordinator-image
+
+docker build -t presto-worker-image -f presto-worker/Dockerfile .
+docker run -d -u datamaster --shm-size 3G -p 8081:8081 --net=alluxio_network --name=presto-worker-00 presto-worker-image
+
+
+========================================================================
+=============================== FRT Method WORKED===============================
+========================================================================
+
+sudo mkdir -p /data/alluxio_ufs
+docker network create alluxio_network
+docker run -d  --rm     -p 19999:19999     -p 19998:19998     -p 39999:39999     --net=alluxio_network     --name=alluxio-master     -v /data/master:/opt/alluxio/logs     -v ufs:/opt/alluxio/underFSStorage     -e ALLUXIO_JAVA_OPTS="-Dalluxio.master.hostname=alluxio-master -Dalluxio.master.mount.table.root.ufs=/opt/alluxio/underFSStorage -Dalluxio.user.file.delete.unchecked=true -Dalluxio.user.file.writetype.default=CACHE_THROUGH -Dalluxio.user.file.ufs.tier.enabled=true -Dalluxio.security.authorization.permission.umask=000"      alluxio/alluxio master
+docker run -d --rm     -p 29999:29999     -p 29998:29998     -p 30000:30000     --net=alluxio_network     --name=alluxio-worker-1     -v /data/worker:/opt/alluxio/logs     -v ufs:/opt/alluxio/underFSStorage     --shm-size=16G     -e ALLUXIO_JAVA_OPTS="-Dalluxio.worker.memory.size=16G  -Dalluxio.master.hostname=alluxio-master  -Dalluxio.worker.hostname=192.168.100.2 -Dalluxio.user.file.delete.unchecked=true -Dalluxio.user.file.writetype.default=CACHE_THROUGH -Dalluxio.user.file.ufs.tier.enabled=true -Dalluxio.security.authorization.permission.umask=000"      alluxio/alluxio worker
+
+
+
+
+chmod -R 777 /data/alluxio_ufs
+
+sudo kill -9 `sudo lsof -t -i:9083`
+
+
+sudo rm -R /data/postgres/
+docker build -t psql-image .
+docker run --restart always --network alluxio_network -itd -p 5432:5432 -v /data/postgres:/usr/lib/postgresql/9.6/data -e POSTGRES_PASSWORD="Aman123!" --name psql psql-image
+
+
+
+docker build -t hive-image .
+docker run -d --restart always -it -p 9083:9083 -p 10000:10000 -p 9000:9000 -p 8088:8088 -p 50070:50070 --name "hive" hive-image
+docker run -d -it -p 9083:9083 -p 10000:10000 -p 9000:9000 -p 8088:8088 -p 50070:50070 --name "hive" hive-image
+docker run -d -it -p 9083:9083 -p 10000:10000 -p 9000:9000 -p 8088:8088 --name "hive" hive-image
+docker exec -it hive bash
+
+/opt/hive/bin/hive --service metastore 
+/opt/hive/bin/hive
+
+
+
+
+docker build -t presto-coordinator .
+docker build -t presto-coordinator .
+docker rm -f coordinator
+docker run -d -it --net alluxio_network -p 8080:8080 --name "coordinator" presto-coordinator
+
+
+docker build -t presto-worker .
+docker rm -f worker
+docker run -d -it --net alluxio_network --name "worker-0"  presto-worker
+
+
+
+CREATE SCHEMA customer;
+CREATE table movies1 ("movieid" bigint,"tag" varchar,"rating_time" timestamp,"genre" varchar,"tag_new" varchar,"released" boolean) WITH (format='parquet',  external_location = 'alluxio://192.168.100.2:19998/dev/frt/customer/movies1/')
+
+
+CONTAINER ID        IMAGE                      COMMAND                  CREATED             STATUS              			PORTS                                                                                              															NAMES
+aad0ac11feeb        		alluxio/alluxio            "/entrypoint.sh work…"   21 hours ago        Up 21 hours         		0.0.0.0:29998-30000->29998-30000/tcp                                                               										alluxio-worker-1
+d4b72c6d163b        	alluxio/alluxio            "/entrypoint.sh mast…"   21 hours ago        Up 21 hours         		0.0.0.0:19998-19999->19998-19999/tcp, 0.0.0.0:39999->39999/tcp                 										alluxio-master
+1eddcf5baa9b        		presto-worker-image        "./bin/launcher run"     23 hours ago        Up 23 hours      		8080/tcp, 0.0.0.0:8081->8081/tcp                                                                   											presto-worker-00
+976051d3ed6d        	presto-coordinator-image   "./bin/launcher run"     23 hours ago        Up 23 hours   		0.0.0.0:8080->8080/tcp                                                                             													presto-coordinator
+cff12f9dfeb3        		hive-image                 "/root/entrypoint.sh"    25 hours ago        Up 25 hours         			0.0.0.0:8088->8088/tcp, 0.0.0.0:9000->9000/tcp, 0.0.0.0:9083->9083/tcp, 0.0.0.0:10000->10000/tcp   	hive
+b0ca9796f267        		psql-image                 "docker-entrypoint.s…"   25 hours ago        Up 25 hours         		0.0.0.0:5432->5432/tcp                                                                             													psql
+
+
+
