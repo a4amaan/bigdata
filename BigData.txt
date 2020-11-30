@@ -42,9 +42,11 @@ docker exec -u datamaster -it hive-00 hive
 =============================== Setup Presto ===============================
 docker build -t presto-coordinator-image -f presto-coordinator/Dockerfile .
 docker run -d --shm-size 3G -u datamaster -p 8080:8080 --net=alluxio_network --name=presto-coordinator presto-coordinator-image
+docker run -d --shm-size 3G -u datamaster -p 8080:8080 -v /home/arsalan/dataprep/presto-udfs:/usr/lib/presto/plugin/udfs --net=alluxio_network --name=presto-coordinator presto-coordinator-image
 
 docker build -t presto-worker-image -f presto-worker/Dockerfile .
 docker run -d -u datamaster --shm-size 3G -p 8081:8081 --net=alluxio_network --name=presto-worker-00 presto-worker-image
+docker run -d -u datamaster --shm-size 3G -p 8081:8081 -v /home/arsalan/dataprep/presto-udfs:/usr/lib/presto/plugin/udfs --net=alluxio_network --name=presto-worker-00 presto-worker-image
 
 
 ========================================================================
@@ -83,7 +85,6 @@ docker exec -it hive bash
 
 
 docker build -t presto-coordinator .
-docker build -t presto-coordinator .
 docker rm -f coordinator
 docker run -d -it --net alluxio_network -p 8080:8080 --name "coordinator" presto-coordinator
 
@@ -97,6 +98,9 @@ docker run -d -it --net alluxio_network --name "worker-0"  presto-worker
 CREATE SCHEMA customer;
 CREATE table movies1 ("movieid" bigint,"tag" varchar,"rating_time" timestamp,"genre" varchar,"tag_new" varchar,"released" boolean) WITH (format='parquet',  external_location = 'alluxio://192.168.100.2:19998/dev/frt/customer/movies1/')
 
+CREATE SCHEMA customer;
+CREATE table movies2 ("movieid" bigint,"tag" varchar,"rating_time" timestamp,"genre" varchar,"tag_new" varchar,"released" boolean) WITH (format='parquet',  external_location = 'alluxio://192.168.100.2:19998/dev/frt/customer/movies1/')
+
 
 CONTAINER ID        IMAGE                      COMMAND                  CREATED             STATUS              			PORTS                                                                                              															NAMES
 aad0ac11feeb        		alluxio/alluxio            "/entrypoint.sh work…"   21 hours ago        Up 21 hours         		0.0.0.0:29998-30000->29998-30000/tcp                                                               										alluxio-worker-1
@@ -105,6 +109,14 @@ d4b72c6d163b        	alluxio/alluxio            "/entrypoint.sh mast…"   21 ho
 976051d3ed6d        	presto-coordinator-image   "./bin/launcher run"     23 hours ago        Up 23 hours   		0.0.0.0:8080->8080/tcp                                                                             													presto-coordinator
 cff12f9dfeb3        		hive-image                 "/root/entrypoint.sh"    25 hours ago        Up 25 hours         			0.0.0.0:8088->8088/tcp, 0.0.0.0:9000->9000/tcp, 0.0.0.0:9083->9083/tcp, 0.0.0.0:10000->10000/tcp   	hive
 b0ca9796f267        		psql-image                 "docker-entrypoint.s…"   25 hours ago        Up 25 hours         		0.0.0.0:5432->5432/tcp                                                                             													psql
+
+
+
+
+
+docker start 1eddcf5baa9b
+docker start 976051d3ed6d
+docker start cff12f9dfeb3
 
 
 
